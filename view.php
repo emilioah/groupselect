@@ -38,6 +38,7 @@ $confirm = optional_param ( 'confirm', 0, PARAM_BOOL );
 $create = optional_param ( 'create', 0, PARAM_BOOL );
 $password = optional_param ( 'group_password', 0, PARAM_BOOL );
 $export = optional_param ( 'export', 0, PARAM_BOOL );
+$export2 = optional_param ( 'export2', 0, PARAM_BOOL );
 $assign = optional_param ( 'assign', 0, PARAM_BOOL );
 $groupid = optional_param ( 'groupid', 0, PARAM_INT );
 $newdescription = optional_param ( 'newdescription', 0, PARAM_TEXT );
@@ -273,33 +274,33 @@ if ($export and $canexport) {
 	// TODO: export only from target grouping
         // 
 	// Fetch groups & assigned teachers
-	$sql = 'SELECT g.id AS groupid, g.name, g.description, u.username, u.firstname, u.lastname, u.email
+	$sql = "SELECT g.id AS groupid, g.name, g.description, u.username, u.firstname, u.lastname, u.email
 			  FROM {groups} g
 		 LEFT JOIN {groupselect_groups_teachers} gt
 			    ON g.id = gt.groupid
 		 LEFT JOIN {user} u 
 			    ON u.id = gt.teacherid
 			 WHERE g.courseid = ?
-		  ORDER BY g.id ASC;';
-	
+		  ORDER BY g.id ASC";
+
 	$group_list = $DB->get_records_sql ( $sql, array (
 			$course->id 
 	) );
 	
 	// Fetch students & groups
-	$sql = 'SELECT m.id, u.username, u.idnumber, u.firstname, u.lastname, u.email, g.id AS groupid 
+	$sql = "SELECT m.id, u.username, u.idnumber, u.firstname, u.lastname, u.email, g.id AS groupid 
             FROM   {user} u, {groups} g, {groups_members} m
             WHERE  g.courseid = ?
             AND    g.id = m.groupid
             AND    u.id = m.userid
-            ORDER BY groupid ASC;';
-	
+            ORDER BY groupid ASC";
+
 	$students = $DB->get_records_sql ( $sql, array (
 			$course->id 
 	) );
 	
 	// Fetch max number of students in a group (may differ from setting, because teacher may add members w/o limits)
-	$sql = 'SELECT MAX(m.members) AS max
+	$sql = "SELECT MAX(m.members) AS max
 			  FROM (SELECT s.groupid, COUNT(s.groupid) AS members 
 			          FROM (SELECT g.id AS groupid
             				  FROM {user} u, {groups} g, {groups_members} m
@@ -307,7 +308,7 @@ if ($export and $canexport) {
                                AND g.id = m.groupid
                                AND u.id = m.userid
                           ORDER BY groupid ASC) s
-			      GROUP BY s.groupid) m;';		
+			      GROUP BY s.groupid) m";		
 			
 	$max_group_size = $DB->get_records_sql ( $sql, array (
 			$course->id 
@@ -431,6 +432,100 @@ if ($export and $canexport) {
 	$exporturl = moodle_url::make_pluginfile_url ( $file->get_contextid (), $file->get_component (), $file->get_filearea (), $file->get_itemid (), $file->get_filepath (), $file->get_filename () );
 }
 
+/* Emilio: Inicio export2 */
+// Group user data export
+if ($export2 and $canexport) {
+	// TODO: export only from target grouping
+	
+	// Fetch students & groups
+	$sql = "SELECT  u.username, u.id AS userid, u.firstname, u.lastname, u.email, grp.id as groupid, grp.name as groupname
+			FROM    {enrol} e, {user_enrolments} ue, {user} u 
+			LEFT JOIN
+				(SELECT m.userid, g.id, g.name
+				FROM {groups} g, {groups_members} m
+				WHERE (		
+				g.courseid = 8
+				AND g.id = m.groupid		
+			)) grp
+			ON (grp.userid = u.id)
+			WHERE  e.courseid = 8
+			AND    e.id = ue.enrolid
+			AND    u.id = ue.userid";
+	
+	$students = $DB->get_records_sql ( $sql, array (
+			$course->id 
+	) );
+
+
+	// Export all users. Group columns will be empty if the user is not member of groups in target grouping
+	$grouping_groups = groups_get_all_groups ($course->id, 0, $groupselect->targetgrouping); // Get groups of targetgrouping
+	$student_array = array();		
+	foreach ($students as $student){
+		$student_groupid = '';
+		$student_groupname = '';
+		foreach ($grouping_groups as $group){
+			if ($student->groupid == $group->id){
+				$student_groupid = $group->id;
+				$student_groupname = $group->name;
+			} 
+		}
+		$student->groupid = $student_groupid;
+		$student->groupname = $student_groupname;
+		$student_array[] = $student;
+	}
+	
+	// Format data to csv
+  	$QUOTE = '"';
+    $CHARS_TO_ESCAPE = array(
+    	$QUOTE => $QUOTE.$QUOTE
+    );
+    $header = array(
+    'lastname',
+    'firstname',
+    'email',
+    'groupname'
+    );
+
+	$content = implode ( (','), $header ) . "\n";
+    foreach ( $student_array as $student ) {    
+		$row = array (
+			$QUOTE.strtr($student->lastname, $CHARS_TO_ESCAPE).$QUOTE,
+			$QUOTE.strtr($student->firstname, $CHARS_TO_ESCAPE).$QUOTE,
+			$QUOTE.strtr($student->email, $CHARS_TO_ESCAPE).$QUOTE,			
+			$QUOTE.strtr($student->groupname, $CHARS_TO_ESCAPE).$QUOTE,			
+		);		
+		$content = $content . implode ( (','), $row ) . "\n";
+	}	
+
+	// File info
+	$separator = '_';
+	$filename = get_string ( 'modulename', 'mod_groupselect' ) . $separator . $course->shortname . $separator . date ( 'Y-m-d' ) . '.csv';
+	$filename = str_replace ( ' ', '', $filename );
+	$fs = get_file_storage ();
+	$fileinfo = array (
+			'contextid' => $context->id, // ID of context
+			'component' => 'mod_groupselect', // usually = table name
+			'filearea' => 'export', // usually = table name
+			'itemid' => $groupselect->id, // usually = ID of row in table
+			'filepath' => '/', // any path beginning and ending in /
+			'filename' => $filename 
+	); // any filename
+	   
+	// See if same file exists
+	$file = $fs->get_file ( $fileinfo ['contextid'], $fileinfo ['component'], $fileinfo ['filearea'], $fileinfo ['itemid'], $fileinfo ['filepath'], $fileinfo ['filename'] );
+	
+	// Delete already existing file
+	if ($file) {
+		$file->delete ();
+	}
+	
+	$file = $fs->create_file_from_string ( $fileinfo, $content );
+	// Store file url to show later
+	$exporturl = moodle_url::make_pluginfile_url ( $file->get_contextid (), $file->get_component (), $file->get_filearea (), $file->get_itemid (), $file->get_filepath (), $file->get_filename () );
+}
+/* Emilio: Fin export2 */
+
+
 // User wants to assign (non-editing) teachers
 if ($assign and $canassign) {
 
@@ -524,6 +619,12 @@ if ($canexport) {
 			'id' => $cm->id,
 			'export' => true 
 	) ), get_string ( 'export', 'mod_groupselect' ) );
+
+    echo $OUTPUT->single_button ( new moodle_url ( '/mod/groupselect/view.php', array (
+			'id' => $cm->id,
+			'export2' => true 
+	) ), get_string ( 'export', 'mod_groupselect' ). " - Alumnos en Columnas" );
+
     }
     else{
         echo '<div class="export_url" >';
@@ -561,12 +662,8 @@ if (empty ( $groups )) {
 	
 	$data = array ();
 	$actionpresent = false;
-	
-	$assigned_relation = $DB->get_records_sql ( 'SELECT g.id AS rid, g.teacherid AS id, g.groupid
-    											FROM  {groupselect_groups_teachers} g
-    									     	WHERE g.instance_id = ?;', array (
-			'instance_id' => $id 
-	) );
+/*Emilio: Sobraba el ; al justo después de la interrogación en la consulta siguiente. Cambio: ?; -> ? */	
+	$assigned_relation = $DB->get_records_sql ( 'SELECT g.id AS rid, g.teacherid AS id, g.groupid FROM  {groupselect_groups_teachers} g WHERE g.instance_id = ?', array ('instance_id' => $id ) );
 	$assigned_teacher_ids = array ();
 	foreach ( $assigned_relation as $r ) {
 		array_push ( $assigned_teacher_ids, $r->id );
@@ -581,7 +678,7 @@ if (empty ( $groups )) {
 			$sql = $sql . 'u.id = ? OR ';
 		}
 		$sql = substr ( $sql, 0, - 3 );
-		$sql = $sql . ';';
+//		$sql = $sql . ';';
 		$assigned_teachers = $DB->get_records_sql ( $sql, $assigned_teacher_ids );
 	}
 	
