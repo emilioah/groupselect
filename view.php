@@ -286,7 +286,7 @@ if ($export and $canexport) {
 	$group_list = $DB->get_records_sql ( $sql, array (
 			$course->id 
 	) );
-	
+
 	// Fetch students & groups
 	$sql = "SELECT m.id, u.username, u.idnumber, u.firstname, u.lastname, u.email, g.id AS groupid 
             FROM   {user} u, {groups} g, {groups_members} m
@@ -298,7 +298,7 @@ if ($export and $canexport) {
 	$students = $DB->get_records_sql ( $sql, array (
 			$course->id 
 	) );
-	
+
 	// Fetch max number of students in a group (may differ from setting, because teacher may add members w/o limits)
 	$sql = "SELECT MAX(m.members) AS max
 			  FROM (SELECT s.groupid, COUNT(s.groupid) AS members 
@@ -313,6 +313,7 @@ if ($export and $canexport) {
 	$max_group_size = $DB->get_records_sql ( $sql, array (
 			$course->id 
 	) );
+
 	$max_group_size = array_pop($max_group_size)->max;
 	
 	 foreach ($students as $student) {
@@ -328,7 +329,7 @@ if ($export and $canexport) {
 	 		}
 	 	}
 	 }
-	
+
 	// Format data to csv
         $QUOTE = '"';
         $CHARS_TO_ESCAPE = array(
@@ -373,7 +374,7 @@ if ($export and $canexport) {
         // TODO: add better export options
         // Quick workaround for Excel
         $content = 'sep=,' . "\n" . $content;
-	
+var_dump($group_list);
         foreach ( $group_list as $r ) {
 		$row = array (
 				$QUOTE.strtr($r->groupid, $CHARS_TO_ESCAPE).$QUOTE,
@@ -402,7 +403,7 @@ if ($export and $canexport) {
 			}
 		}
                 array_splice($row, 2, 0, $QUOTE.strval($groupsize).$QUOTE);
-		$content = $content . implode ( (','), $row ) . "\n";
+		$content = $content . implode ( (','), $row ) . "\n";		
 	}
 	
 	// File info
@@ -444,16 +445,16 @@ if ($export2 and $canexport) {
 				(SELECT m.userid, g.id, g.name
 				FROM {groups} g, {groups_members} m
 				WHERE (		
-				g.courseid = 8
+				g.courseid = ?
 				AND g.id = m.groupid		
 			)) grp
 			ON (grp.userid = u.id)
-			WHERE  e.courseid = 8
+			WHERE  e.courseid = ?
 			AND    e.id = ue.enrolid
 			AND    u.id = ue.userid";
 	
 	$students = $DB->get_records_sql ( $sql, array (
-			$course->id 
+			$course->id , $course->id
 	) );
 
 
@@ -626,6 +627,7 @@ if ($canexport) {
 	) ), get_string ( 'export', 'mod_groupselect' ). " - Alumnos en Columnas" );
 
     }
+
     else{
         echo '<div class="export_url" >';
         echo $OUTPUT->action_link ( $exporturl, get_string ( 'export_download', 'mod_groupselect' ) );
