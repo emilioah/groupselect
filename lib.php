@@ -253,5 +253,5 @@ function groupselect_pluginfile($course, $cm, $context, $filearea, $args, $force
  
     // We can now send the file back to the browser - in this case with a cache lifetime of 1 day and no filtering. 
     // From Moodle 2.3, use send_stored_file instead.
-    send_stored_file($file, 86400, 0, 'true', $options);
+    send_stored_file($file, 30, 0, 'true', $options);
 }
