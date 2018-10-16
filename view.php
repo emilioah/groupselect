@@ -473,7 +473,8 @@ if ($export2 and $canexport) {
 		}
 		$student->groupid = $student_groupid;
 		$student->groupname = $student_groupname;
-		$student_array[] = $student;
+		if (!isset($student_array[$student->userid]) || $student_groupid != '')
+			$student_array[$student->userid] = $student;
 	}
 
 	// Format data to csv
@@ -625,7 +626,7 @@ if ($canexport) {
     echo $OUTPUT->single_button ( new moodle_url ( '/mod/groupselect/view.php', array (
 			'id' => $cm->id,
 			'export2' => true
-	) ), get_string ( 'export', 'mod_groupselect' ). " - Lista de participantes" );
+	) ), get_string ( 'export', 'mod_groupselect' ). " - Lista de alumnos y grupos" );
 
     }
 
