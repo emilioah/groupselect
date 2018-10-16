@@ -437,33 +437,34 @@ var_dump($group_list);
 // Group user data export
 if ($export2 and $canexport) {
 	// TODO: export only from target grouping
-	
-	// Fetch students & groups
-	$sql = "SELECT  u.username, u.id AS userid, u.firstname, u.lastname, u.email, grp.id as groupid, grp.name as groupname
-			FROM    {enrol} e, {user_enrolments} ue, {user} u 
-			LEFT JOIN
-				(SELECT m.userid, g.id, g.name
-				FROM {groups} g, {groups_members} m
-				WHERE (		
-				g.courseid = ?
-				AND g.id = m.groupid		
-			)) grp
-			ON (grp.userid = u.id)
-			WHERE  e.courseid = ?
-			AND    e.id = ue.enrolid
-			AND    u.id = ue.userid";
+
+        // Fetch students & groups
+        // Note: "get_records_sql" returns an associative array with with one objet for every distinct value of first field in select clause. 
+        // memberid is used as 1st field to override this behavior and keep all rows (users belonging to more than one groups)
+        $sql = "SELECT  grp.memberid, u.username, u.id AS userid, u.firstname, u.lastname, u.email, grp.groupid, grp.groupname
+                        FROM    {enrol} e, {user_enrolments} ue, {user} u 
+                        LEFT JOIN
+                                (SELECT m.id as memberid, m.userid, g.id as groupid, g.name as groupname
+                                FROM {groups} g, {groups_members} m
+                                WHERE (         
+                                g.courseid = ?
+                                AND g.id = m.groupid            
+                        )) grp
+                        ON (grp.userid = u.id)
+                        WHERE  e.courseid = ?
+                        AND    e.id = ue.enrolid
+                        AND    u.id = ue.userid";
 	
 	$students = $DB->get_records_sql ( $sql, array (
 			$course->id , $course->id
 	) );
-
 
 	// Export all users. Group columns will be empty if the user is not member of groups in target grouping
 	$grouping_groups = groups_get_all_groups ($course->id, 0, $groupselect->targetgrouping); // Get groups of targetgrouping
 	$student_array = array();		
 	foreach ($students as $student){
 		$student_groupid = '';
-		$student_groupname = '';
+		$student_groupname = '';		
 		foreach ($grouping_groups as $group){
 			if ($student->groupid == $group->id){
 				$student_groupid = $group->id;
@@ -483,7 +484,7 @@ if ($export2 and $canexport) {
     $header = array(
     'lastname',
     'firstname',
-    'email',
+    'email',    
     'groupname'
     );
 
@@ -493,7 +494,7 @@ if ($export2 and $canexport) {
 			$QUOTE.strtr($student->lastname, $CHARS_TO_ESCAPE).$QUOTE,
 			$QUOTE.strtr($student->firstname, $CHARS_TO_ESCAPE).$QUOTE,
 			$QUOTE.strtr($student->email, $CHARS_TO_ESCAPE).$QUOTE,			
-			$QUOTE.strtr($student->groupname, $CHARS_TO_ESCAPE).$QUOTE,			
+			$QUOTE.strtr($student->groupname, $CHARS_TO_ESCAPE).$QUOTE,
 		);		
 		$content = $content . implode ( (','), $row ) . "\n";
 	}	
