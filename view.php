@@ -374,7 +374,7 @@ if ($export and $canexport) {
         // TODO: add better export options
         // Quick workaround for Excel
         $content = 'sep=,' . "\n" . $content;
-var_dump($group_list);
+
         foreach ( $group_list as $r ) {
 		$row = array (
 				$QUOTE.strtr($r->groupid, $CHARS_TO_ESCAPE).$QUOTE,
@@ -490,6 +490,7 @@ if ($export2 and $canexport) {
     );
 
 	$content = implode ( (','), $header ) . "\n";
+	$content = 'sep=,' . "\n" . $content;
     foreach ( $student_array as $student ) {
 		$row = array (
 			$QUOTE.strtr($student->lastname, $CHARS_TO_ESCAPE).$QUOTE,
