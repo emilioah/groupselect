@@ -625,7 +625,7 @@ if ($canexport) {
     echo $OUTPUT->single_button ( new moodle_url ( '/mod/groupselect/view.php', array (
 			'id' => $cm->id,
 			'export2' => true
-	) ), get_string ( 'export', 'mod_groupselect' ). " - Alumnos en Columnas" );
+	) ), get_string ( 'export', 'mod_groupselect' ). " - Lista de participantes" );
 
     }
 
