@@ -441,10 +441,10 @@ if ($export2 and $canexport) {
         // Fetch students & groups
         // Note: "get_records_sql" returns an associative array with with one objet for every distinct value of first field in select clause.
         // memberid is used as 1st field to override this behavior and keep all rows (users belonging to more than one groups)
-        $sql = "SELECT  grp.memberid, u.username, u.id AS userid, u.firstname, u.lastname, u.email, grp.groupid, grp.groupname
+        $sql = "SELECT  grp.memberid, u.username, u.id AS userid, u.firstname, u.lastname, u.email, grp.groupid, grp.groupname, grp.timeadded
                         FROM    {enrol} e, {user_enrolments} ue, {user} u
                         LEFT JOIN
-                                (SELECT m.id as memberid, m.userid, g.id as groupid, g.name as groupname
+                                (SELECT m.id as memberid, m.userid, g.id as groupid, g.name as groupname, m.timeadded
                                 FROM {groups} g, {groups_members} m
                                 WHERE (
                                 g.courseid = ?
@@ -465,14 +465,17 @@ if ($export2 and $canexport) {
 	foreach ($students as $student){
 		$student_groupid = '';
 		$student_groupname = '';
+		$student_timeadded = '';
 		foreach ($grouping_groups as $group){
 			if ($student->groupid == $group->id){
 				$student_groupid = $group->id;
 				$student_groupname = $group->name;
+				$student_timeadded = date ('Y-m-d H:i:s', $student->timeadded);
 			}
 		}
 		$student->groupid = $student_groupid;
 		$student->groupname = $student_groupname;
+		$student->timeadded = $student_timeadded;
 		if (!isset($student_array[$student->userid]) || $student_groupid != '')
 			$student_array[$student->userid] = $student;
 	}
@@ -486,7 +489,8 @@ if ($export2 and $canexport) {
     'lastname',
     'firstname',
     'email',
-    'groupname'
+    'groupname',
+    'timeadded'
     );
 
 	$content = implode ( (','), $header ) . "\n";
@@ -496,7 +500,8 @@ if ($export2 and $canexport) {
 			$QUOTE.strtr($student->lastname, $CHARS_TO_ESCAPE).$QUOTE,
 			$QUOTE.strtr($student->firstname, $CHARS_TO_ESCAPE).$QUOTE,
 			$QUOTE.strtr($student->email, $CHARS_TO_ESCAPE).$QUOTE,
-			$QUOTE.strtr($student->groupname, $CHARS_TO_ESCAPE).$QUOTE,
+			$QUOTE.strtr($student->groupname, $CHARS_TO_ESCAPE).$QUOTE,			
+			$QUOTE.strtr($student->timeadded, $CHARS_TO_ESCAPE).$QUOTE,
 		);
 		$content = $content . implode ( (','), $row ) . "\n";
 	}
