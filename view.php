@@ -37,9 +37,7 @@ $unselect = optional_param ( 'unselect', 0, PARAM_INT );
 $confirm = optional_param ( 'confirm', 0, PARAM_BOOL );
 $create = optional_param ( 'create', 0, PARAM_BOOL );
 $password = optional_param ( 'group_password', 0, PARAM_BOOL );
-$export = optional_param ( 'export', 0, PARAM_BOOL );
-$export2 = optional_param ( 'export2', 0, PARAM_BOOL );
-$export3 = optional_param ( 'export3', 0, PARAM_BOOL );
+$exportformat = optional_param ( 'exportformat', 0, PARAM_TEXT );
 $assign = optional_param ( 'assign', 0, PARAM_BOOL );
 $groupid = optional_param ( 'groupid', 0, PARAM_INT );
 $newdescription = optional_param ( 'newdescription', 0, PARAM_TEXT );
@@ -271,7 +269,7 @@ if ($select and $canselect and isset ( $groups [$select] ) and $isopen) {
 }
 
 // Group user data export
-if ($export and $canexport) {
+if (($exportformat==='export') and $canexport) {
 	// TODO: export only from target grouping
         //
 	// Fetch groups & assigned teachers
@@ -434,110 +432,10 @@ if ($export and $canexport) {
 	$exporturl = moodle_url::make_pluginfile_url ( $file->get_contextid (), $file->get_component (), $file->get_filearea (), $file->get_itemid (), $file->get_filepath (), $file->get_filename () );
 }
 
-/* Emilio: Inicio export2 */
+/* Emilio: Inicio exportcsv */
 // Group user data export
-if ($export2 and $canexport) {
-	// TODO: export only from target grouping
 
-        // Fetch students & groups
-        // Note: "get_records_sql" returns an associative array with with one objet for every distinct value of first field in select clause.
-        // memberid is used as 1st field to override this behavior and keep all rows (users belonging to more than one groups)
-        $sql = "SELECT  grp.memberid, u.username, u.id AS userid, u.firstname, u.lastname, u.email, grp.groupid, grp.groupname, grp.timeadded
-                        FROM    {enrol} e, {user_enrolments} ue, {user} u
-                        LEFT JOIN
-                                (SELECT m.id as memberid, m.userid, g.id as groupid, g.name as groupname, m.timeadded
-                                FROM {groups} g, {groups_members} m
-                                WHERE (
-                                g.courseid = ?
-                                AND g.id = m.groupid
-                        )) grp
-                        ON (grp.userid = u.id)
-                        WHERE  e.courseid = ?
-                        AND    e.id = ue.enrolid
-                        AND    u.id = ue.userid";
-
-	$students = $DB->get_records_sql ( $sql, array (
-			$course->id , $course->id
-	) );
-
-	// Export all users. Group columns will be empty if the user is not member of groups in target grouping
-	$grouping_groups = groups_get_all_groups ($course->id, 0, $groupselect->targetgrouping); // Get groups of targetgrouping
-	$student_array = array();
-	foreach ($students as $student){
-		$student_groupid = '';
-		$student_groupname = '';
-		$student_timeadded = '';
-		foreach ($grouping_groups as $group){
-			if ($student->groupid == $group->id){
-				$student_groupid = $group->id;
-				$student_groupname = $group->name;
-				$student_timeadded = date ('Y-m-d H:i:s', $student->timeadded);
-			}
-		}
-		$student->groupid = $student_groupid;
-		$student->groupname = $student_groupname;
-		$student->timeadded = $student_timeadded;
-		if (!isset($student_array[$student->userid]) || $student_groupid != '')
-			$student_array[$student->userid] = $student;
-	}
-
-	// Format data to csv
-  	$QUOTE = '"';
-    $CHARS_TO_ESCAPE = array(
-    	$QUOTE => $QUOTE.$QUOTE
-    );
-    $header = array(
-    'lastname',
-    'firstname',
-    'email',
-    'groupname',
-    'timeadded'
-    );
-
-	$content = implode ( (','), $header ) . "\n";
-	$content = 'sep=,' . "\n" . $content;
-    foreach ( $student_array as $student ) {
-		$row = array (
-			$QUOTE.strtr($student->lastname, $CHARS_TO_ESCAPE).$QUOTE,
-			$QUOTE.strtr($student->firstname, $CHARS_TO_ESCAPE).$QUOTE,
-			$QUOTE.strtr($student->email, $CHARS_TO_ESCAPE).$QUOTE,
-			$QUOTE.strtr($student->groupname, $CHARS_TO_ESCAPE).$QUOTE,			
-			$QUOTE.strtr($student->timeadded, $CHARS_TO_ESCAPE).$QUOTE,
-		);
-		$content = $content . implode ( (','), $row ) . "\n";
-	}
-
-	// File info
-	$separator = '_';
-	$filename = get_string ( 'modulename', 'mod_groupselect' ) . $separator . $course->shortname . $separator . date ( 'Y-m-d' ) . '.csv';
-	$filename = str_replace ( ' ', '', $filename );
-	$fs = get_file_storage ();
-	$fileinfo = array (
-			'contextid' => $context->id, // ID of context
-			'component' => 'mod_groupselect', // usually = table name
-			'filearea' => 'export', // usually = table name
-			'itemid' => $groupselect->id, // usually = ID of row in table
-			'filepath' => '/', // any path beginning and ending in /
-			'filename' => $filename
-	); // any filename
-
-	// See if same file exists
-	$file = $fs->get_file ( $fileinfo ['contextid'], $fileinfo ['component'], $fileinfo ['filearea'], $fileinfo ['itemid'], $fileinfo ['filepath'], $fileinfo ['filename'] );
-
-	// Delete already existing file
-	if ($file) {
-		$file->delete ();
-	}
-
-	$file = $fs->create_file_from_string ( $fileinfo, $content );
-	// Store file url to show later
-	$exporturl = moodle_url::make_pluginfile_url ( $file->get_contextid (), $file->get_component (), $file->get_filearea (), $file->get_itemid (), $file->get_filepath (), $file->get_filename () );
-}
-/* Emilio: Fin export2 */
-
-/* Emilio: Inicio export3 */
-// Group user data export
-if ($export3 and $canexport) {
+if (($exportformat==='exportcsv') and $canexport) {	
 	
 	require_once("{$CFG->libdir}/csvlib.class.php");
 
@@ -547,10 +445,10 @@ if ($export3 and $canexport) {
         // Fetch students & groups
         // Note: "get_records_sql" returns an associative array with with one objet for every distinct value of first field in select clause.
         // memberid is used as 1st field to override this behavior and keep all rows (users belonging to more than one groups)
-	$sql = "SELECT  concat(grp.memberid, u.username) as memberkey, u.username, u.id AS userid, u.firstname, u.lastname, u.email, grp.groupid, grp.groupname
+	$sql = "SELECT  grp.memberid, u.username, u.id AS userid, u.firstname, u.lastname, u.email, grp.groupid, grp.groupname, grp.timeadded
 		FROM    {enrol} e, {user_enrolments} ue, {user} u
 		LEFT JOIN
-			(SELECT m.id as memberid, m.userid, g.id as groupid, g.name as groupname
+			(SELECT m.id as memberid, m.userid, g.id as groupid, g.name as groupname, m.timeadded as timeadded
 			FROM {groups} g, {groups_members} m
 			WHERE (
 			g.courseid = ?
@@ -576,7 +474,7 @@ if ($export3 and $canexport) {
 			if ($student->groupid == $group->id){
 				$student_groupid = $group->id;
 				$student_groupname = $group->name;
-//				$student_timeadded = date ('Y-m-d H:i:s', $student->timeadded);
+				$student_timeadded = date ('Y-m-d H:i:s', $student->timeadded);
 			}
 		}
 		$student->groupid = $student_groupid;
@@ -593,7 +491,7 @@ if ($export3 and $canexport) {
 		'firstname',
 		'email',
 		'groupname',
-//		'timeadded'
+		'timeadded'
 	);
 	$export_writer->add_data($header);
 
@@ -603,13 +501,100 @@ if ($export3 and $canexport) {
 		$row[] = $student->firstname;
 		$row[] = $student->email;
 		$row[] = $student->groupname;
-//		$row[] = $student->timeadded;
+		$row[] = $student->timeadded;
 		$export_writer->add_data($row);
 	}	
 	$export_writer->download_file();
 
 }
-/* Emilio: Fin export3 */
+/* Emilio: Fin exportcsv */
+
+
+/* Emilio: Inicio exportexcel */
+// Group user data export
+if (($exportformat==='exportexcel') and $canexport) {
+	
+	require_once("{$CFG->libdir}/excellib.class.php");
+
+	$workbook =  new MoodleExcelWorkbook("-");
+	$workbook->send ('export-'.$groupselect->name);
+	$myxls = $workbook->add_worksheet('Groupselect');
+
+        // Fetch students & groups
+        // Note: "get_records_sql" returns an associative array with with one objet for every distinct value of first field in select clause.
+        // memberid is used as 1st field to override this behavior and keep all rows (users belonging to more than one groups)
+	$sql = "SELECT  grp.memberid, u.username, u.id AS userid, u.firstname, u.lastname, u.email, grp.groupid, grp.groupname, grp.timeadded
+		FROM    {enrol} e, {user_enrolments} ue, {user} u
+		LEFT JOIN
+			(SELECT m.id as memberid, m.userid, g.id as groupid, g.name as groupname, m.timeadded as timeadded
+			FROM {groups} g, {groups_members} m
+			WHERE (
+			g.courseid = ?
+			AND g.id = m.groupid
+			)) grp
+		ON (grp.userid = u.id)
+		WHERE  e.courseid = ?
+		AND    e.id = ue.enrolid
+		AND    u.id = ue.userid";
+
+	$students_rs = $DB->get_recordset_sql ( $sql, array (
+		$course->id , $course->id
+	) );
+
+	// Export all users. Group columns will be empty if the user is not member of groups in target grouping
+	$grouping_groups = groups_get_all_groups ($course->id, 0, $groupselect->targetgrouping); // Get groups of targetgrouping
+	$student_array = array();
+	foreach ($students_rs as $student){
+		$student_groupid = '';
+		$student_groupname = '';
+		$student_timeadded = '';
+		foreach ($grouping_groups as $group){
+			if ($student->groupid == $group->id){
+				$student_groupid = $group->id;
+				$student_groupname = $group->name;
+				$student_timeadded = date ('Y-m-d H:i:s', $student->timeadded);
+			}
+		}
+		$student->groupid = $student_groupid;
+		$student->groupname = $student_groupname;
+		$student->timeadded = $student_timeadded;
+		if (!isset($student_array[$student->userid]) || $student_groupid != '')
+			$student_array[$student->userid] = $student;
+	}
+	$students_rs->close();
+
+	// Format data to csv
+	$header = array(
+		'lastname',
+		'firstname',
+		'email',
+		'groupname',
+		'timeadded'
+	);
+
+	$xls_row  = $xls_col = 0;
+	foreach($header as $header_col){
+		$myxls->write_string($xls_row, $xls_col++, $header_col);
+	}
+	$xls_row ++;
+	foreach ( $student_array as $student ) {
+		$xls_col=0;
+		$row = array ();
+		$row[] = $student->lastname;
+		$row[] = $student->firstname;
+		$row[] = $student->email;
+		$row[] = $student->groupname;
+		$row[] = $student->timeadded;
+		foreach ($row as $row_field){
+			$myxls->write_string ($xls_row, $xls_col++, $row_field);
+		}
+		$xls_row++;
+	}	
+
+	$workbook->close();
+	exit;
+}
+/* Emilio: Fin exportexcel */
 
 
 
@@ -701,29 +686,20 @@ if ($cancreate and $isopen and ! $create) {
 
 // Export button
 if ($canexport) {
-    if( $exporturl === '' ) {
-    echo $OUTPUT->single_button ( new moodle_url ( '/mod/groupselect/view.php', array (
-			'id' => $cm->id,
-			'export' => true
-	) ), get_string ( 'export', 'mod_groupselect' ) );
-/*
-    echo $OUTPUT->action_link ( new moodle_url ( '/mod/groupselect/view.php', array (
-			'id' => $cm->id,
-			'export2' => true
-	) ), get_string ( 'export', 'mod_groupselect' ). " - Lista de alumnos y grupos" );
-*/
-    echo $OUTPUT->single_button ( new moodle_url ( '/mod/groupselect/view.php', array (
-			'id' => $cm->id,
-			'export3' => true
-	) ), get_string ( 'export', 'mod_groupselect' ). " - Lista de alumnos y grupos" );
-    }
+        
+    /* Exportación con lista desplegable*/
+    $exportoptions = array (    	
+    	'exportcsv' => 'Lista de alumnos y grupos (CSV)',
+    	'exportexcel' => 'Lista de alumnos y grupos (Excel)',
+    	'export' => 'Lista en el formato que se muestra abajo (CSV)'
+    );
 
-    else{
-        echo '<div class="export_url" >';
-        echo $OUTPUT->action_link ( $exporturl, get_string ( 'export_download', 'mod_groupselect' ) );
-	echo '</div> <br>';
-
-    }
+    echo "<br /><form action=\"$CFG->wwwroot/mod/groupselect/view.php\" method=\"get\">\n";
+    echo "<input type=\"hidden\" name=\"id\" value=\"".$cm->id."\" />\n";
+    echo html_writer::label('Formato de exportación:', null, true);
+    echo html_writer::select($exportoptions, 'exportformat', '', false);
+	echo '  <input type="submit" value="Descargar" />';
+	echo "</form>";	
 }
 
 // Assign button
